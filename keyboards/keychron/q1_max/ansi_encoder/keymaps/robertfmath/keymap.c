@@ -27,8 +27,8 @@ enum tap_dances {
     TD_ESC_CAPS,
 };
 
-// Tap-dance states for the Caps Lock key: tap = Escape, hold = Ctrl,
-// double tap = real Caps Lock.
+// Tap-dance states for the Caps Lock key: tap = Escape,
+// hold = Cmd (Mac) / Ctrl (Windows), double tap = real Caps Lock.
 typedef enum {
     TD_STATE_NONE,
     TD_STATE_SINGLE_TAP,
@@ -38,11 +38,21 @@ typedef enum {
 
 static td_state_t esc_caps_state = TD_STATE_NONE;
 
+// The modifier actually registered on hold, so we release the same one
+// we pressed even if the active OS layer somehow changes mid-hold.
+static uint8_t held_mod = KC_NO;
+
+// Cmd on the Mac base layer, Ctrl on the Windows base layer -- whichever
+// is the "primary" shortcut modifier for the currently active OS layer.
+static inline uint8_t os_hold_mod(void) {
+    return (get_highest_layer(default_layer_state) == WIN_BASE) ? KC_LCTL : KC_LGUI;
+}
+
 td_state_t cur_dance(tap_dance_state_t *state) {
     if (state->count == 1) {
         // Still held, even if another key interrupted us -> treat as hold
-        // (Ctrl), so fast Ctrl+<key> combos register correctly. Only
-        // resolve to a tap (Escape) once the key has actually been
+        // (Cmd/Ctrl), so fast Cmd/Ctrl+<key> combos register correctly.
+        // Only resolve to a tap (Escape) once the key has actually been
         // released.
         if (state->pressed) return TD_STATE_SINGLE_HOLD;
         return TD_STATE_SINGLE_TAP;
@@ -59,7 +69,8 @@ void esc_caps_finished(tap_dance_state_t *state, void *user_data) {
             tap_code(KC_ESC);
             break;
         case TD_STATE_SINGLE_HOLD:
-            register_code(KC_LCTL);
+            held_mod = os_hold_mod();
+            register_code(held_mod);
             break;
         case TD_STATE_DOUBLE_TAP:
             tap_code(KC_CAPS);
@@ -71,7 +82,7 @@ void esc_caps_finished(tap_dance_state_t *state, void *user_data) {
 
 void esc_caps_reset(tap_dance_state_t *state, void *user_data) {
     if (esc_caps_state == TD_STATE_SINGLE_HOLD) {
-        unregister_code(KC_LCTL);
+        unregister_code(held_mod);
     }
     esc_caps_state = TD_STATE_NONE;
 }
